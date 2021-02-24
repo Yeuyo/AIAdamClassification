@@ -1,4 +1,5 @@
 import numpy
+from mlxtend.data import loadlocal_mnist
 
 class AdamOptimizer():
     def __init__(self, alp=-0.1, beta1=0.9, beta2=0.999, epsilon=1e-8):
@@ -24,14 +25,16 @@ def randInitializeWeights(L_in, L_out):
 
 def sigmoid(z):
     # Compute Sigmoid function
+    z = numpy.reshape(z,[len(z),1])
+    numpy.warnings.filterwarnings('ignore', 'overflow')
     g = 1.0 / (1.0 + numpy.exp(-z))
-    g = numpy.append([[1]], g, axis=0) # To account for the bias node
+    g = numpy.append(1, g) # To account for the bias node
     return g
 
 def applyFeedForward(X, w0):
     netoutput = [i for i in range(num_of_layers+1)]
     netinput = [i for i in range(num_of_layers+1)]
-    netoutput[0] = numpy.append([[1]], X, axis=0) # Add in the bias node
+    netoutput[0] = numpy.append(1, X) # Add in the bias node
     for i in range(num_of_layers):
         netinput[i+1] = numpy.matmul(numpy.transpose(w0[i]), netoutput[i])
         netoutput[i+1] = sigmoid(netinput[i+1])    
@@ -51,21 +54,23 @@ def costFunction():
     return cost
 
 # Training sets
-#f = open("train-images", "r")
-#a = numpy.fromfile(f, dtype=numpy.uint32)
-X = numpy.array([
-                 [[0],[0]], # first data set
-                 [[0],[1]], # second data set
-                 [[1],[0]],
-                 [[1],[1]]
-                ])
+X, y0 = loadlocal_mnist(images_path='train-images.idx3-ubyte',
+                       labels_path='train-labels.idx1-ubyte')
+y = numpy.zeros([X.shape[0],10])
+for i in range(X.shape[0]):
+    y[i,y0[i]]=1
+X=X[:10,:] # If you only want to use some of the training sets
+y=y[:10,:]
 
-y = numpy.array([
-                 [[1],[0]], 
-                 [[0],[1]],
-                 [[0],[1]],
-                 [[1],[0]],
-                ])
+
+# Testing sets
+X1, y1 = loadlocal_mnist(images_path='t10k-images.idx3-ubyte',
+                         labels_path='t10k-labels.idx1-ubyte')
+y01 = numpy.zeros([X1.shape[0],10])
+for i in range(X1.shape[0]):
+    y01[i,y1[i]]=1
+X1=X1[:2,:]   # If you only want to use some of the test sets
+y01=y01[:2,:]
 
 # Setup the parameters
 criterion = 1e-9
@@ -76,6 +81,7 @@ sample_size = X.shape[0]                   # Number of samples given (numbers of
 num_labels = y.shape[1]                    # This should be the number of classification/labels  
                                            # (with the first column meaning the solution is '1'
                                            # and so on)
+test_size = X1.shape[0]
 num_of_layers = len(hidden_layer_size) + 1 # plus input layer
 
 w0 = [0.0 for i in range(num_of_layers)]
@@ -107,20 +113,21 @@ for t in range(MaxIter):
                 if j == num_of_layers - 1: # Output layer do not have bias
                     sigmas[j] = numpy.matmul(w0[j], sigmas[j + 1])
                 else:
-                    sigmas[j] = numpy.matmul(w0[j], sigmas[j + 1][1:])  
+                    sigmas[j] = numpy.matmul(w0[j], sigmas[j + 1][1:])
+        numpy.warnings.filterwarnings('ignore', category=numpy.VisibleDeprecationWarning) 
         derivative_of_sigmoid = nodes * (numpy.array([1]) - nodes)
         sigmas = derivative_of_sigmoid * sigmas
         for j in range(num_of_layers):
             if j == num_of_layers - 1:
-                dw = nodes[j] * numpy.transpose(sigmas[j+1]) # Output layer do not have bias to remove
+                dw = numpy.reshape(nodes[j],[len(nodes[j]),1]) * numpy.transpose(numpy.reshape(sigmas[j+1],[len(sigmas[j+1]),1])) # nodes[j] * numpy.transpose(sigmas[j+1]) # Output layer do not have bias to remove
             else:
-                dw = nodes[j] * numpy.transpose(sigmas[j+1][1:])
+                dw = numpy.reshape(nodes[j],[len(nodes[j]),1]) * numpy.transpose(numpy.reshape(sigmas[j+1][1:],[len(sigmas[j+1][1:]),1])) # nodes[j] * numpy.transpose(sigmas[j+1][1:])
             m_dw[j], v_dw[j], w0[j] = adam.update(t=t+1, m_dw=m_dw[j], v_dw=v_dw[j], w=w0[j], dw=dw)
 
-for i in range(sample_size):
-    nodes = applyFeedForward(X[i], w0)
+for i in range(test_size):
+    nodes = applyFeedForward(X1[i], w0)
     predict = nodes[num_of_layers]
-    actual = y[i]
+    actual = y01[i]
     # valuepredict = numpy.zeros_like(predict)
     # valuepredict[numpy.arange(len(predict)),predict.argmax(1)] = 1
-    print(numpy.transpose(X[i])," -> actual: ", numpy.transpose(actual)[0],", predict: ", numpy.transpose(predict)[0])
+    print(numpy.transpose(X1[i])," -> actual: ", numpy.transpose(actual),", predict: ", numpy.transpose(predict))
